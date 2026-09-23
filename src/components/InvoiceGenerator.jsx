@@ -3769,7 +3769,13 @@ export default function InvoiceGenerator({ onBack, profile: profileProp, editing
                     {posOpts.length > 0 ? (
                       <select className="form-input" value={details.placeOfSupply}
                         onChange={(e) => setDetails({ ...details, placeOfSupply: e.target.value })}>
-                        <option value="">Defaults to Client State</option>
+                        <option value="">
+                          {client?.country && client.country !== (profile?.country || 'India')
+                            ? 'Defaults to Outside India / Export (IGST)'
+                            : client?.state
+                              ? `Defaults to Client State (${client.state})`
+                              : 'Defaults to Client State'}
+                        </option>
                         {posOpts.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     ) : (

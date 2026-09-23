@@ -266,19 +266,44 @@ export function computeInvoiceTotals(opts) {
     warnings.push('Place of supply is not set. Falling back to client state.');
   }
 
-  const isForeignSupply = isClientForeign || isForeignCurrency;
-  const hasDistinctPos = !!placeOfSupplyRaw && !!businessState &&
-    (businessCode && posCode ? businessCode !== posCode : businessState.toLowerCase() !== placeOfSupplyRaw.toLowerCase());
-  const hasDistinctState = !!clientState && !!businessState &&
-    (businessCode && posCode ? businessCode !== posCode : businessState.toLowerCase() !== clientState.toLowerCase());
+  const explicitPos = (details.placeOfSupply || '').trim();
+  const hasExplicitPos = Boolean(explicitPos);
 
-  const isInterstate = isIndia && (
-    isSEZ ||
-    isForeignSupply ||
-    hasDistinctPos ||
-    hasDistinctState ||
-    (!!businessCode && !!posCode && businessCode !== posCode)
-  );
+  // Determine whether supply is interstate vs intrastate:
+  // 1. SEZ supplies are ALWAYS interstate under §7(5)(b) of the IGST Act.
+  // 2. If Place of Supply is explicitly specified by the user, POS rules govern:
+  //    - POS in the same State/UT as supplier -> Intra-state (CGST + SGST / UTGST),
+  //      even if recipient is an international client or payment is in foreign currency
+  //      (e.g., services/goods supplied within the seller's state to overseas clients).
+  //    - POS in a different State/UT or outside India -> Inter-state (IGST).
+  // 3. If POS is not explicitly provided:
+  //    - International client or foreign currency defaults to foreign supply / export (IGST).
+  //    - Domestic client defaults to client's state.
+  let isInterstate = false;
+  if (isIndia) {
+    if (isSEZ) {
+      isInterstate = true;
+    } else if (hasExplicitPos) {
+      const isSameAsBusinessState = Boolean(
+        businessState && (
+          (businessCode && posCode)
+            ? businessCode === posCode
+            : businessState.toLowerCase() === explicitPos.toLowerCase()
+        )
+      );
+      isInterstate = !isSameAsBusinessState;
+    } else {
+      const isForeignSupply = isClientForeign || isForeignCurrency;
+      const isClientSameState = Boolean(
+        businessState && clientState && (
+          (businessCode && posCode)
+            ? businessCode === posCode
+            : businessState.toLowerCase() === clientState.toLowerCase()
+        )
+      );
+      isInterstate = isForeignSupply || !isClientSameState;
+    }
+  }
 
   // UTGST for intra-UT supplies. When supplier & recipient are BOTH in
   // one of the 5 UTs without legislature, and it's intra-state (same

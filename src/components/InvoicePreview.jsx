@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import DOMPurify from 'dompurify';
-import { numberToWords, formatCurrency, INVOICE_TYPES, getCountryConfig, CURRENCY_NAMES, formatExchangeRateLine, getAccountById, getPaperSize, resolveLineDiscount, htmlHasText, splitNumberedTerms } from '../utils';
+import { numberToWords, formatCurrency, INVOICE_TYPES, getCountryConfig, CURRENCY_NAMES, formatExchangeRateLine, getAccountById, getPaperSize, resolveLineDiscount, htmlHasText, splitNumberedTerms, getStateCode } from '../utils';
 import { getPrintSettings, getLabel } from '../utils/printSettings';
 
 // v1.10.36 — Optional `previewOnly` prop suppresses the internal
@@ -24,15 +24,21 @@ const InvoicePreview = React.forwardRef(({ profile, client, details, items, tota
   // igst field).
   const businessState = profile?.state?.trim().toLowerCase();
   const clientState = client?.state?.trim().toLowerCase();
+  const explicitPos = details?.placeOfSupply?.trim().toLowerCase();
   const isInterstate = totals?.isInterstate != null
     ? Boolean(totals.isInterstate)
     : (
         (typeof totals?.igst === 'number' && totals.igst > 0)
         || !!client?.isSEZ
-        || (client?.country && client.country !== 'India')
-        || (options?.currency && options.currency !== 'INR')
-        || (details?.placeOfSupply && businessState && details.placeOfSupply.toLowerCase() !== businessState)
-        || (businessState && clientState && businessState !== clientState)
+        || (explicitPos && businessState
+            ? (getStateCode(explicitPos) && getStateCode(businessState)
+                ? getStateCode(explicitPos) !== getStateCode(businessState)
+                : explicitPos !== businessState)
+            : (
+                (client?.country && client.country !== 'India')
+                || (options?.currency && options.currency !== 'INR')
+                || (businessState && clientState && businessState !== clientState)
+              ))
       );
   const typeConfig = INVOICE_TYPES[invoiceType] || INVOICE_TYPES['tax-invoice'];
   // Seller's country drives tax label (GST / VAT / SST / MwSt etc.) and bank label.
@@ -327,7 +333,7 @@ const InvoicePreview = React.forwardRef(({ profile, client, details, items, tota
             <h4 className="inv-section-label">{getLabel(_ps_labels, 'placeOfSupply')}</h4>
             <p className="inv-party-name">{details?.placeOfSupply || client?.state || '-'}</p>
             {showGST && isIndia && isInterstate && <span className="inv-tax-badge">Interstate (IGST)</span>}
-            {showGST && isIndia && !isInterstate && businessState && clientState && <span className="inv-tax-badge inv-tax-badge-green">Intrastate (CGST + SGST)</span>}
+            {showGST && isIndia && !isInterstate && businessState && (details?.placeOfSupply || clientState) && <span className="inv-tax-badge inv-tax-badge-green">Intrastate (CGST + SGST)</span>}
             {showGST && !isIndia && <span className="inv-tax-badge inv-tax-badge-green">{taxLabel}</span>}
           </div>
         )}
